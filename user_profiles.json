@@ -1,0 +1,22 @@
+{
+  "rain": {
+    "age": 15,
+    "gender": "男",
+    "height": 170.0,
+    "weight": 58.5,
+    "body_fat": 10.0,
+    "activity_level": "中度活動（每週運動 3-5 天）",
+    "goal_type": "乾淨增肌 / 增重",
+    "custom_goal": "增重，增加胸部跟背部線條，同時維持腹肌"
+  },
+  "高天野": {
+    "age": 15,
+    "gender": "男",
+    "height": 170.0,
+    "weight": 58.5,
+    "body_fat": 10.0,
+    "activity_level": "中度活動（每週運動 3-5 天）",
+    "goal_type": "乾淨增肌 / 增重",
+    "custom_goal": "增重，增加胸部跟背部線條，同時維持腹肌"
+  }
+}
