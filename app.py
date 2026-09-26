@@ -1,9 +1,10 @@
 import os
 import json
+import base64
+import requests
 import streamlit as st
-import google.generativeai as genai
-from google.api_core import client_options as client_options_lib
 from PIL import Image
+import io
 
 # ----------------- 頁面基本配置 -----------------
 st.set_page_config(
@@ -29,30 +30,13 @@ elif "API_KEY" in st.secrets:
 elif os.getenv("API_KEY"):
     api_key = os.getenv("API_KEY")
 
-# 初始化 Gemini API（支援 AQ 格式與標準格式）
-api_ready = False
 if api_key:
     api_key = api_key.strip()
-    try:
-        if api_key.startswith("AQ."):
-            # 強制走 REST 協定，避免舊版 gRPC 報 401 錯誤
-            genai.configure(
-                api_key=api_key,
-                transport="rest",
-                client_options=client_options_lib.ClientOptions(
-                    api_endpoint="generativelanguage.googleapis.com"
-                )
-            )
-        else:
-            genai.configure(api_key=api_key)
-        api_ready = True
-        st.sidebar.success("● 正使用系統預設金鑰" if not custom_key else "● 正使用自訂金鑰")
-    except Exception as e:
-        st.sidebar.error(f"金鑰配置失敗: {e}")
+    st.sidebar.success("● 正使用金鑰")
 else:
     st.sidebar.warning("⚠️ 尚未設定 API 金鑰，請輸入金鑰或於 Secrets 配置")
 
-# --- 教別人取得金鑰的教學折疊區塊 ---
+# --- 教學折疊區塊 ---
 with st.sidebar.expander("❓ 如何 10 秒取得免費金鑰？"):
     st.markdown("""
     1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)。
@@ -80,7 +64,7 @@ goal_type = st.sidebar.selectbox("目標類型", ["乾淨增肌 / 增重", "減�
 
 # 計算基礎 TDEE 參考
 bmr = (10 * weight) + (6.25 * height) - (5 * age) + (5 if gender == "男生" else -161)
-tdee = int(bmr * 1.55)  # 抓中度活動量
+tdee = int(bmr * 1.55)
 
 # ----------------- 主畫面 -----------------
 st.title("🥗 智慧個人營養師分析助理")
@@ -107,15 +91,19 @@ if uploaded_file is not None:
     st.image(image, caption="餐點照片預覽", use_container_width=True)
 
 if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
-    if not api_ready:
+    if not api_key:
         st.error("請先設定有效的 API 金鑰！")
     elif uploaded_file is None:
         st.warning("請先上傳食物照片再進行分析！")
     else:
         with st.spinner("AI 營養師正在為您計算份量與三大營養素..."):
             try:
-                # 使用視覺模型進行多模態辨識分析
-                model = genai.GenerativeModel("gemini-1.5-flash")
+                # 轉成 base64
+                uploaded_file.seek(0)
+                image_bytes = uploaded_file.read()
+                image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+                mime_type = uploaded_file.type if uploaded_file.type else "image/jpeg"
+
                 prompt = f"""
 你是一位專業的個人運動營養師。
 目前正在為學員【{user_id}】進行精準飲食分析：
@@ -132,8 +120,31 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
 3. 根據他設定的目標（{goal_type}），給出 2~3 點具體且可執行的飲食調整建議（例如：蛋白質是否充足、是否需要補充優質碳水或控制油脂等）。
 請以清晰條列、語氣專業且鼓勵的方式回覆。
 """
-                response = model.generate_content([prompt, image])
-                st.success("分析完成！")
-                st.markdown(response.text)
+                # 直接使用 REST API 呼叫，不依賴 SDK 驗證邏輯
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                payload = {
+                    "contents": [{
+                        "parts": [
+                            {"text": prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": image_b64
+                                }
+                            }
+                        ]
+                    }]
+                }
+                headers = {"Content-Type": "application/json"}
+                res = requests.post(url, headers=headers, json=payload, timeout=60)
+                res_data = res.json()
+
+                if res.status_code == 200:
+                    text_result = res_data["candidates"][0]["content"]["parts"][0]["text"]
+                    st.success("分析完成！")
+                    st.markdown(text_result)
+                else:
+                    err_msg = res_data.get("error", {}).get("message", res.text)
+                    st.error(f"分析失敗 ({res.status_code})：{err_msg}")
             except Exception as e:
-                st.error(f"分析失敗，錯誤訊息：{e}")
+                st.error(f"發生未預期的錯誤：{e}")
