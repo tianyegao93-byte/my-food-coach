@@ -1,5 +1,4 @@
 import os
-import json
 import base64
 import requests
 import streamlit as st
@@ -12,41 +11,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# ----------------- 側邊欄：API Key 設定 -----------------
-st.sidebar.markdown("### 🔑 API Key 設定")
-
-custom_key = st.sidebar.text_input(
-    "自訂金鑰 (留空則使用系統預設)",
-    value="",
-    placeholder="在此貼上 AQ... 或 AIza... 金鑰",
-    help="金鑰僅用於當次辨識分析，不會儲存於任何公開資料庫。"
-)
-
-api_key = None
-if custom_key and custom_key.strip():
-    api_key = custom_key.strip()
-elif "API_KEY" in st.secrets:
-    api_key = st.secrets["API_KEY"].strip()
-elif os.getenv("API_KEY"):
-    api_key = os.getenv("API_KEY").strip()
-
-if api_key:
-    masked_key = api_key[:4] + "...." + api_key[-4:] if len(api_key) > 8 else "●●●●"
-    st.sidebar.success(f"● 已載入金鑰 ({masked_key})")
-else:
-    st.sidebar.warning("⚠️ 尚未設定 API 金鑰，請於上方輸入或於 Secrets 配置")
-
-# --- 教學折疊區塊 ---
-with st.sidebar.expander("❓ 如何 10 秒取得免費金鑰？"):
-    st.markdown("""
-    1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)。
-    2. 登入 Google 帳號，點擊 **「Create API key」**。
-    3. 複製產生的金鑰，貼到上方即可！
-    
-    *完全免費、免綁信用卡、享個人專屬額度。*
-    """)
-
-st.sidebar.markdown("---")
+# ----------------- 系統端讀取金鑰 -----------------
+# 優先讀取 Streamlit Secrets，其次環境變數
+api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or st.secrets.get("API_KEY")
 
 # ----------------- 側邊欄：個人檔案與身體數據 -----------------
 st.sidebar.markdown("### 👤 個人檔案代號")
@@ -62,6 +29,7 @@ current_body_fat = st.sidebar.number_input("目前體脂 (%)", min_value=3.0, ma
 target_body_fat = st.sidebar.number_input("目標體脂 (%)", min_value=3.0, max_value=50.0, value=10.0, step=0.5)
 goal_type = st.sidebar.selectbox("目標類型", ["乾淨增肌 / 增重", "減脂 / 塑形", "維持健康體態"], index=0)
 
+# 計算基礎 TDEE 參考
 bmr = (10 * weight) + (6.25 * height) - (5 * age) + (5 if gender == "男生" else -161)
 tdee = int(bmr * 1.55)
 
@@ -91,7 +59,7 @@ if uploaded_file is not None:
 
 if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
     if not api_key:
-        st.error("請先設定有效的 API 金鑰！")
+        st.error("伺服器金鑰未配置，請於 Streamlit Secrets 設定 GEMINI_API_KEY。")
     elif uploaded_file is None:
         st.warning("請先上傳食物照片再進行分析！")
     else:
@@ -132,17 +100,23 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                     }]
                 }
 
+                clean_key = str(api_key).strip()
                 url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
                 headers = {"Content-Type": "application/json"}
 
-                # 關鍵修正：判斷 Key 格式，AQ 帶 Bearer Token，AIza 帶 Header 或 URL Key
-                if api_key.startswith("AQ"):
-                    headers["Authorization"] = f"Bearer {api_key}"
+                if clean_key.startswith("AQ"):
+                    headers["Authorization"] = f"Bearer {clean_key}"
                 else:
-                    headers["x-goog-api-key"] = api_key
-                    url += f"?key={api_key}"
+                    url += f"?key={clean_key}"
 
                 res = requests.post(url, headers=headers, json=payload, timeout=60)
+                
+                # 若 Bearer 模式遇 401 則自動改為 query parameter 重試
+                if res.status_code == 401 and clean_key.startswith("AQ"):
+                    fallback_url = f"{url}?key={clean_key}"
+                    fallback_headers = {"Content-Type": "application/json"}
+                    res = requests.post(fallback_url, headers=fallback_headers, json=payload, timeout=60)
+
                 res_data = res.json()
 
                 if res.status_code == 200:
