@@ -12,7 +12,6 @@ st.set_page_config(
 )
 
 # ----------------- 系統端讀取金鑰 -----------------
-# 優先讀取 Streamlit Secrets，其次環境變數
 api_key = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY") or st.secrets.get("API_KEY")
 
 # ----------------- 側邊欄：個人檔案與身體數據 -----------------
@@ -101,21 +100,16 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                 }
 
                 clean_key = str(api_key).strip()
-                url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+                # 修正模型呼叫路徑，優先使用正式穩定版 gemini-1.5-flash-latest
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={clean_key}"
                 headers = {"Content-Type": "application/json"}
-
-                if clean_key.startswith("AQ"):
-                    headers["Authorization"] = f"Bearer {clean_key}"
-                else:
-                    url += f"?key={clean_key}"
 
                 res = requests.post(url, headers=headers, json=payload, timeout=60)
                 
-                # 若 Bearer 模式遇 401 則自動改為 query parameter 重試
-                if res.status_code == 401 and clean_key.startswith("AQ"):
-                    fallback_url = f"{url}?key={clean_key}"
-                    fallback_headers = {"Content-Type": "application/json"}
-                    res = requests.post(fallback_url, headers=fallback_headers, json=payload, timeout=60)
+                # 若 flash-latest 不可用，自動切換至 v1 正式端點重試
+                if res.status_code == 404:
+                    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={clean_key}"
+                    res = requests.post(url, headers=headers, json=payload, timeout=60)
 
                 res_data = res.json()
 
