@@ -15,10 +15,13 @@ st.set_page_config(
 
 # ----------------- 側邊欄：API Key 設定 -----------------
 st.sidebar.markdown("### 🔑 API Key 設定")
+
+# 改用一般文字輸入框，加上 placeholder 與說明，徹底防止 Chrome 密碼管理器跳出
 custom_key = st.sidebar.text_input(
-    "自訂金鑰 (留空則使用預設)",
-    type="password",
-    help="若留空，系統將使用預設的 AI Studio 金鑰"
+    "自訂金鑰 (留空則使用系統預設)",
+    value="",
+    placeholder="在此貼上 AQ... 或 AIza... 金鑰",
+    help="金鑰僅用於當次辨識分析，不會儲存於任何公開資料庫。"
 )
 
 # 依序取得金鑰（自訂 > Streamlit Secrets > 系統環境變數）
@@ -26,24 +29,25 @@ api_key = None
 if custom_key and custom_key.strip():
     api_key = custom_key.strip()
 elif "API_KEY" in st.secrets:
-    api_key = st.secrets["API_KEY"]
+    api_key = st.secrets["API_KEY"].strip()
 elif os.getenv("API_KEY"):
-    api_key = os.getenv("API_KEY")
+    api_key = os.getenv("API_KEY").strip()
 
 if api_key:
-    api_key = api_key.strip()
-    st.sidebar.success("● 正使用金鑰")
+    # 遮蔽顯示前幾碼與後幾碼，保護隱私安全
+    masked_key = api_key[:4] + "...." + api_key[-4:] if len(api_key) > 8 else "●●●●"
+    st.sidebar.success(f"● 已載入金鑰 ({masked_key})")
 else:
-    st.sidebar.warning("⚠️ 尚未設定 API 金鑰，請輸入金鑰或於 Secrets 配置")
+    st.sidebar.warning("⚠️ 尚未設定 API 金鑰，請於上方輸入或於 Secrets 配置")
 
 # --- 教學折疊區塊 ---
 with st.sidebar.expander("❓ 如何 10 秒取得免費金鑰？"):
     st.markdown("""
     1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)。
     2. 登入 Google 帳號，點擊 **「Create API key」**。
-    3. 複製那串金鑰，貼到上方即可！
+    3. 複製產生的金鑰，貼到上方即可！
     
-    *免綁信用卡、完全免費、享有個人專屬額度。*
+    *完全免費、免綁信用卡、享個人專屬額度。*
     """)
 
 st.sidebar.markdown("---")
@@ -98,7 +102,7 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
     else:
         with st.spinner("AI 營養師正在為您計算份量與三大營養素..."):
             try:
-                # 轉成 base64
+                # 轉成 base64 封裝發送
                 uploaded_file.seek(0)
                 image_bytes = uploaded_file.read()
                 image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -120,7 +124,7 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
 3. 根據他設定的目標（{goal_type}），給出 2~3 點具體且可執行的飲食調整建議（例如：蛋白質是否充足、是否需要補充優質碳水或控制油脂等）。
 請以清晰條列、語氣專業且鼓勵的方式回覆。
 """
-                # 直接使用 REST API 呼叫，不依賴 SDK 驗證邏輯
+                # REST API 請求，支援所有格式 API Key
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
                 payload = {
                     "contents": [{
