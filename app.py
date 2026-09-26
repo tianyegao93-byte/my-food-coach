@@ -100,25 +100,31 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                 }
 
                 clean_key = str(api_key).strip()
-                # 修正模型呼叫路徑，優先使用正式穩定版 gemini-1.5-flash-latest
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={clean_key}"
                 headers = {"Content-Type": "application/json"}
 
-                res = requests.post(url, headers=headers, json=payload, timeout=60)
-                
-                # 若 flash-latest 不可用，自動切換至 v1 正式端點重試
-                if res.status_code == 404:
-                    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={clean_key}"
-                    res = requests.post(url, headers=headers, json=payload, timeout=60)
+                # 依序嘗試 Google 各支援的端點與模型名稱
+                candidate_urls = [
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key={clean_key}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key={clean_key}",
+                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={clean_key}",
+                    f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-001:generateContent?key={clean_key}"
+                ]
 
-                res_data = res.json()
+                res = None
+                success = False
+                for target_url in candidate_urls:
+                    res = requests.post(target_url, headers=headers, json=payload, timeout=60)
+                    if res.status_code == 200:
+                        success = True
+                        break
 
-                if res.status_code == 200:
+                if success and res is not None:
+                    res_data = res.json()
                     text_result = res_data["candidates"][0]["content"]["parts"][0]["text"]
                     st.success("分析完成！")
                     st.markdown(text_result)
                 else:
-                    err_msg = res_data.get("error", {}).get("message", res.text)
-                    st.error(f"分析失敗 ({res.status_code})：{err_msg}")
+                    err_msg = res.json().get("error", {}).get("message", res.text) if res else "請求未完成"
+                    st.error(f"分析失敗 ({res.status_code if res else '無回應'})：{err_msg}")
             except Exception as e:
                 st.error(f"發生未預期的錯誤：{e}")
