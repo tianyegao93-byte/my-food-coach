@@ -89,7 +89,7 @@ uploaded_file = st.file_uploader("📸 請拍攝或上傳食物照片...", type=
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-    st.image(image, caption="餐點照片預覽", use_column_width=True)
+    st.image(image, caption="餐點照片預覽", use_container_width=True)
 
 if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
     if not api_ready:
