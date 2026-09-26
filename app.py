@@ -100,23 +100,30 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                 }
 
                 clean_key = str(api_key).strip()
-                headers = {"Content-Type": "application/json"}
+                # 官方標準認證 Header
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": clean_key
+                }
 
-                # 依序嘗試 Google 各支援的端點與模型名稱
-                candidate_urls = [
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-002:generateContent?key={clean_key}",
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key={clean_key}",
-                    f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={clean_key}",
-                    f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-001:generateContent?key={clean_key}"
+                # 嘗試最新版 gemini-2.5-flash 與相容端點
+                candidate_models = [
+                    "gemini-2.5-flash",
+                    "gemini-2.0-flash",
+                    "gemini-2.0-flash-001"
                 ]
 
                 res = None
                 success = False
-                for target_url in candidate_urls:
-                    res = requests.post(target_url, headers=headers, json=payload, timeout=60)
-                    if res.status_code == 200:
-                        success = True
-                        break
+                for m in candidate_models:
+                    target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
+                    try:
+                        res = requests.post(target_url, headers=headers, json=payload, timeout=60)
+                        if res.status_code == 200:
+                            success = True
+                            break
+                    except Exception:
+                        continue
 
                 if success and res is not None:
                     res_data = res.json()
@@ -124,7 +131,12 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                     st.success("分析完成！")
                     st.markdown(text_result)
                 else:
-                    err_msg = res.json().get("error", {}).get("message", res.text) if res else "請求未完成"
-                    st.error(f"分析失敗 ({res.status_code if res else '無回應'})：{err_msg}")
+                    err_msg = ""
+                    if res is not None:
+                        try:
+                            err_msg = res.json().get("error", {}).get("message", res.text)
+                        except Exception:
+                            err_msg = res.text
+                    st.error(f"分析失敗 ({res.status_code if res else '連線失敗'})：{err_msg}")
             except Exception as e:
                 st.error(f"發生未預期的錯誤：{e}")
