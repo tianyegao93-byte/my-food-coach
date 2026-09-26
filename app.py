@@ -52,6 +52,16 @@ if api_key:
 else:
     st.sidebar.warning("⚠️ 尚未設定 API 金鑰，請輸入金鑰或於 Secrets 配置")
 
+# --- 教別人取得金鑰的教學折疊區塊 ---
+with st.sidebar.expander("❓ 如何 10 秒取得免費金鑰？"):
+    st.markdown("""
+    1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey)。
+    2. 登入 Google 帳號，點擊 **「Create API key」**。
+    3. 複製那串金鑰，貼到上方即可！
+    
+    *免綁信用卡、完全免費、享有個人專屬額度。*
+    """)
+
 st.sidebar.markdown("---")
 
 # ----------------- 側邊欄：個人檔案與身體數據 -----------------
@@ -64,7 +74,8 @@ gender = st.sidebar.selectbox("性別", ["男生", "女生"], index=0)
 height = st.sidebar.number_input("身高 (cm)", min_value=100.0, max_value=250.0, value=170.0, step=0.5)
 weight = st.sidebar.number_input("目前體重 (kg)", min_value=30.0, max_value=200.0, value=58.5, step=0.5)
 target_weight = st.sidebar.number_input("目標體重 (kg)", min_value=30.0, max_value=200.0, value=62.0, step=0.5)
-target_body_fat = st.sidebar.number_input("目標體脂 (%)", min_value=5.0, max_value=50.0, value=10.0, step=0.5)
+current_body_fat = st.sidebar.number_input("目前體脂 (%)", min_value=3.0, max_value=50.0, value=10.0, step=0.5)
+target_body_fat = st.sidebar.number_input("目標體脂 (%)", min_value=3.0, max_value=50.0, value=10.0, step=0.5)
 goal_type = st.sidebar.selectbox("目標類型", ["乾淨增肌 / 增重", "減脂 / 塑形", "維持健康體態"], index=0)
 
 # 計算基礎 TDEE 參考
@@ -73,11 +84,15 @@ tdee = int(bmr * 1.55)  # 抓中度活動量
 
 # ----------------- 主畫面 -----------------
 st.title("🥗 智慧個人營養師分析助理")
-st.caption(f"學員：{user_id} ｜ {age} 歲 {gender} ｜ 身高 {height} cm ｜ 體重 {weight} kg")
+st.caption(f"學員：{user_id} ｜ {age} 歲 {gender} ｜ 身高 {height} cm ｜ 體重 {weight} kg ｜ 體脂 {current_body_fat}%")
 
 weight_diff = round(target_weight - weight, 1)
-diff_text = f"+{weight_diff}" if weight_diff > 0 else f"{weight_diff}"
-st.info(f"🎯 **衝刺目標**：【{goal_type}】邁向 {target_weight} kg (差距 {diff_text} kg) ｜ 目標體脂 {target_body_fat}% ｜ 每日建議能量參考 (TDEE)：約 {tdee} kcal")
+diff_weight_text = f"+{weight_diff}" if weight_diff > 0 else f"{weight_diff}"
+
+fat_diff = round(target_body_fat - current_body_fat, 1)
+diff_fat_text = f"+{fat_diff}" if fat_diff > 0 else f"{fat_diff}"
+
+st.info(f"🎯 **衝刺目標**：【{goal_type}】邁向 {target_weight} kg (差距 {diff_weight_text} kg) ｜ 目標體脂 {target_body_fat}% (差距 {diff_fat_text}%) ｜ 每日建議能量參考 (TDEE)：約 {tdee} kcal")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -105,7 +120,7 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
 你是一位專業的個人運動營養師。
 目前正在為學員【{user_id}】進行精準飲食分析：
 - 性別：{gender}，年齡：{age} 歲
-- 身高：{height} cm，目前體重：{weight} kg
+- 身高：{height} cm，目前體重：{weight} kg，目前體脂：{current_body_fat}%
 - 目標設定：{goal_type}（目標體重 {target_weight} kg，目標體脂 {target_body_fat}%）
 - 每日建議 TDEE 參考：約 {tdee} kcal
 - 餐別：{meal_type}
