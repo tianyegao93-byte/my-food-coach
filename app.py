@@ -4,7 +4,6 @@ import base64
 import requests
 import streamlit as st
 from PIL import Image
-import io
 
 # ----------------- 頁面基本配置 -----------------
 st.set_page_config(
@@ -16,7 +15,6 @@ st.set_page_config(
 # ----------------- 側邊欄：API Key 設定 -----------------
 st.sidebar.markdown("### 🔑 API Key 設定")
 
-# 改用一般文字輸入框，加上 placeholder 與說明，徹底防止 Chrome 密碼管理器跳出
 custom_key = st.sidebar.text_input(
     "自訂金鑰 (留空則使用系統預設)",
     value="",
@@ -24,7 +22,6 @@ custom_key = st.sidebar.text_input(
     help="金鑰僅用於當次辨識分析，不會儲存於任何公開資料庫。"
 )
 
-# 依序取得金鑰（自訂 > Streamlit Secrets > 系統環境變數）
 api_key = None
 if custom_key and custom_key.strip():
     api_key = custom_key.strip()
@@ -34,7 +31,6 @@ elif os.getenv("API_KEY"):
     api_key = os.getenv("API_KEY").strip()
 
 if api_key:
-    # 遮蔽顯示前幾碼與後幾碼，保護隱私安全
     masked_key = api_key[:4] + "...." + api_key[-4:] if len(api_key) > 8 else "●●●●"
     st.sidebar.success(f"● 已載入金鑰 ({masked_key})")
 else:
@@ -66,7 +62,6 @@ current_body_fat = st.sidebar.number_input("目前體脂 (%)", min_value=3.0, ma
 target_body_fat = st.sidebar.number_input("目標體脂 (%)", min_value=3.0, max_value=50.0, value=10.0, step=0.5)
 goal_type = st.sidebar.selectbox("目標類型", ["乾淨增肌 / 增重", "減脂 / 塑形", "維持健康體態"], index=0)
 
-# 計算基礎 TDEE 參考
 bmr = (10 * weight) + (6.25 * height) - (5 * age) + (5 if gender == "男生" else -161)
 tdee = int(bmr * 1.55)
 
@@ -102,7 +97,6 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
     else:
         with st.spinner("AI 營養師正在為您計算份量與三大營養素..."):
             try:
-                # 轉成 base64 封裝發送
                 uploaded_file.seek(0)
                 image_bytes = uploaded_file.read()
                 image_b64 = base64.b64encode(image_bytes).decode("utf-8")
@@ -124,8 +118,6 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
 3. 根據他設定的目標（{goal_type}），給出 2~3 點具體且可執行的飲食調整建議（例如：蛋白質是否充足、是否需要補充優質碳水或控制油脂等）。
 請以清晰條列、語氣專業且鼓勵的方式回覆。
 """
-                # REST API 請求，支援所有格式 API Key
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
                 payload = {
                     "contents": [{
                         "parts": [
@@ -139,7 +131,17 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                         ]
                     }]
                 }
+
+                url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
                 headers = {"Content-Type": "application/json"}
+
+                # 關鍵修正：判斷 Key 格式，AQ 帶 Bearer Token，AIza 帶 Header 或 URL Key
+                if api_key.startswith("AQ"):
+                    headers["Authorization"] = f"Bearer {api_key}"
+                else:
+                    headers["x-goog-api-key"] = api_key
+                    url += f"?key={api_key}"
+
                 res = requests.post(url, headers=headers, json=payload, timeout=60)
                 res_data = res.json()
 
