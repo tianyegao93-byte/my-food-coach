@@ -100,30 +100,25 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                 }
 
                 clean_key = str(api_key).strip()
-                # 官方標準認證 Header
                 headers = {
                     "Content-Type": "application/json",
                     "x-goog-api-key": clean_key
                 }
 
-                # 嘗試最新版 gemini-2.5-flash 與相容端點
-                candidate_models = [
-                    "gemini-2.5-flash",
-                    "gemini-2.0-flash",
-                    "gemini-2.0-flash-001"
-                ]
-
+                # 官方指定最新活躍模型：優先 gemini-2.5-flash
+                models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
                 res = None
                 success = False
-                for m in candidate_models:
-                    target_url = f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
-                    try:
-                        res = requests.post(target_url, headers=headers, json=payload, timeout=60)
-                        if res.status_code == 200:
-                            success = True
-                            break
-                    except Exception:
-                        continue
+
+                for model_name in models_to_try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                    response = requests.post(url, headers=headers, json=payload, timeout=60)
+                    if response.status_code == 200:
+                        res = response
+                        success = True
+                        break
+                    else:
+                        res = response
 
                 if success and res is not None:
                     res_data = res.json()
@@ -137,6 +132,6 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                             err_msg = res.json().get("error", {}).get("message", res.text)
                         except Exception:
                             err_msg = res.text
-                    st.error(f"分析失敗 ({res.status_code if res else '連線失敗'})：{err_msg}")
+                    st.error(f"分析失敗 ({res.status_code if res else '未知錯誤'})：{err_msg}")
             except Exception as e:
                 st.error(f"發生未預期的錯誤：{e}")
