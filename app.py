@@ -105,8 +105,12 @@ if st.button("🪄 開始量身分析這餐營養", use_container_width=True):
                     "x-goog-api-key": clean_key
                 }
 
-                # 官方指定最新活躍模型：優先 gemini-2.5-flash
-                models_to_try = ["gemini-2.5-flash", "gemini-2.5-pro"]
+                # 依序使用官方推薦的活躍模型
+                models_to_try = [
+                    "gemini-3.1-pro-preview",
+                    "gemini-3-flash-preview",
+                    "gemini-2.5-flash"
+                ]
                 res = None
                 success = False
 
